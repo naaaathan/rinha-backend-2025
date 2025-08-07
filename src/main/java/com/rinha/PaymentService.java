@@ -70,18 +70,18 @@ public class PaymentService {
         this.asyncWriter = asyncWriter;
     }
 
-    @Retry(maxRetries = 40, jitter = 0)
+    @Retry(maxRetries = -1, jitter = 0)
     public void processPayment(PaymentsRequest paymentsRequest) {
         this.callDefaultPayment(paymentsRequest);
     }
 
     @Fallback(fallbackMethod = "callFallbackPayment")
-    @CircuitBreaker(requestVolumeThreshold = 4, failureRatio = 0.75, delay = 250)
+    @CircuitBreaker(requestVolumeThreshold = 4, failureRatio = 0.75, delay = 100)
     public void callDefaultPayment(PaymentsRequest paymentsRequest) {
         var processorRequest = createProcessorRequest(paymentsRequest);
         var response = defaultPaymentsClient.sendPayment(processorRequest);
         LOG.debug("Default Response: " + response);
-        savePayment(DEFAULT_PAYMENTS_KEY, paymentsRequest);
+        savePayment(DEFAULT_PAYMENTS_KEY, processorRequest);
         LOG.debug("Default payment request processed");
     }
 
@@ -90,12 +90,12 @@ public class PaymentService {
         var processorRequest = createProcessorRequest(paymentsRequest);
         var response = fallbackPaymentsClient.sendPayment(processorRequest);
         LOG.debug("Fallback response: " + response);
-        savePayment(FALLBACK_PAYMENTS_KEY, paymentsRequest);
+        savePayment(FALLBACK_PAYMENTS_KEY, processorRequest);
         LOG.debug("Fallback payment request processed");
     }
 
     private void savePayment(String key, PaymentsRequest paymentsRequest) {
-        long timestamp = Instant.now().toEpochMilli();
+        long timestamp = paymentsRequest.requestedAt().toEpochMilli();
         var uniqueMember = paymentsRequest.amount() + "::" + paymentsRequest.correlationId();
         asyncWriter.scheduleSave(key, timestamp, uniqueMember);
     }
