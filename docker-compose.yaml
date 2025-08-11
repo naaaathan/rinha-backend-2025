@@ -1,12 +1,78 @@
+x-app-common: &app_common
+  image: ddf4009a3a7b1e6edb47838dfad88ecb5f588c517e2e23db4d4ed28fd8d45678
+  environment:
+    QUARKUS_REDIS_HOSTS: redis://redis:6379
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    QUARKUS_HTTP_PORT: "8080"
+  depends_on:
+    redis:
+      condition: service_started
+  restart: unless-stopped
+
 services:
   redis:
-    image: redis:alpine
-    container_name: my-redis-service
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    restart: always
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "0.20"
+          memory: 60M
+    restart: unless-stopped
+    networks:
+      - backend
 
-volumes:
-  redis-data:
+  app1:
+    <<: *app_common
+    deploy:
+      resources:
+        limits:
+          cpus: "0.80"
+          memory: 300M
+    networks:
+      - backend
+      - payment-processor
+
+  app2:
+    <<: *app_common
+    deploy:
+      resources:
+        limits:
+          cpus: "0.80"
+          memory: 300M
+    networks:
+      - backend
+      - payment-processor
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - app1
+      - app2
+    ports:
+      - "9999:9999"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ulimits:
+      nofile: 200000
+    command: [ "sh","-c","nginx -t && exec nginx -g 'daemon off;'" ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 25M
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+  payment-processor:
+    external: true

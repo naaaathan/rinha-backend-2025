@@ -18,7 +18,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class RedisAsyncWriter {
 
     private static final Logger LOG = Logger.getLogger(RedisAsyncWriter.class);
-    private static final int CONSUMER_COUNT = 40;
+    private static final int CONSUMER_COUNT = 50;
 
     private final ReactiveSortedSetCommands<String, String> sortedSetCommands;
     private final BlockingQueue<PaymentJob> paymentQueue = new LinkedBlockingQueue<>();
@@ -32,7 +32,7 @@ public class RedisAsyncWriter {
     }
 
     void onStart(@Observes StartupEvent ev) {
-        LOG.infof("Starting %d Redis writer consumers...", CONSUMER_COUNT);
+        LOG.debugf("Starting %d Redis writer consumers...", CONSUMER_COUNT);
         for (int i = 0; i < CONSUMER_COUNT; i++) {
             workerExecutor.submit(this::runConsumer);
         }
@@ -50,7 +50,7 @@ public class RedisAsyncWriter {
                 var job = paymentQueue.take();
                 processJob(job);
             } catch (InterruptedException e) {
-                LOG.info("Consumer thread interrupted. Shutting down.");
+                LOG.debug("Consumer thread interrupted. Shutting down.");
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
@@ -68,7 +68,7 @@ public class RedisAsyncWriter {
     }
 
     void onStop(@Observes ShutdownEvent ev) {
-        LOG.info("Shutting down worker executor.");
+        LOG.debug("Shutting down worker executor.");
         workerExecutor.shutdownNow();
     }
 }

@@ -14,6 +14,7 @@ import jakarta.ws.rs.core.MediaType;
 import org.jboss.resteasy.reactive.ResponseStatus;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ExecutorService;
 
 @Path("/")
@@ -42,8 +43,8 @@ public class PaymentsController {
             @QueryParam("from") String from,
             @QueryParam("to") String to) {
 
-        Instant fromInstant = from == null ? Instant.MIN : Instant.parse(from);
-        Instant toInstant = to == null ? Instant.MAX : Instant.parse(to);
+        Instant fromInstant = from == null ? Instant.now().minus(1, ChronoUnit.DAYS) : Instant.parse(from);
+        Instant toInstant = to == null ? Instant.now().plus(1, ChronoUnit.DAYS) : Instant.parse(to);
 
         return paymentService.getPaymentsSummary(fromInstant, toInstant);
     }
