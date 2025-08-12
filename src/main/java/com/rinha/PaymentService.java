@@ -5,16 +5,11 @@ import com.rinha.client.FallbackPaymentsClient;
 import com.rinha.controller.PaymentsRequest;
 import com.rinha.controller.PaymentsSummary;
 import com.rinha.controller.SummaryDetails;
-import io.quarkus.redis.datasource.RedisDataSource;
-import io.quarkus.redis.datasource.sortedset.ReactiveSortedSetCommands;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.redis.client.RedisAPI;
-import io.vertx.mutiny.redis.client.Response;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
-import org.eclipse.microprofile.faulttolerance.Fallback;
-import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.faulttolerance.*;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
@@ -38,23 +33,19 @@ public class PaymentService {
             -- Explicitly convert arguments to numbers to ensure correct type matching.
             local min_score = tonumber(ARGV[1])
             local max_score = tonumber(ARGV[2])
+            local members   = redis.call('ZRANGEBYSCORE', KEYS[1], min_score, max_score)
             
-            -- Now, call ZRANGEBYSCORE with numbers instead of strings.
-            local members = redis.call('ZRANGEBYSCORE', KEYS[1], min_score, max_score)
-            
-            local total_requests = 0
-            local total_amount = 0.0
-            
-            for i, member in ipairs(members) do
-                total_requests = total_requests + 1
-                local separator_pos = string.find(member, '::', 1, true)
-                if separator_pos then
-                    local amount_str = string.sub(member, 1, separator_pos - 1)
-                    total_amount = total_amount + tonumber(amount_str)
-                end
+            local total_requests = #members
+            local total_cents = 0
+            for i = 1, total_requests do
+              local pos = string.find(members[i], '::', 1, true)
+              if pos then
+                local cents = tonumber(string.sub(members[i], 1, pos - 1))
+                total_cents = total_cents + cents
+              end
             end
-            
-            return {tostring(total_requests), tostring(total_amount)}
+            return { tostring(total_requests), tostring(total_cents) }
+
             """;
 
     @Inject
@@ -76,7 +67,8 @@ public class PaymentService {
     }
 
     @Fallback(fallbackMethod = "callFallbackPayment")
-    @CircuitBreaker(requestVolumeThreshold = 4, failureRatio = 0.75, delay = 100)
+    @CircuitBreaker(requestVolumeThreshold=4, failureRatio=0.75, delay=100)
+    @Bulkhead(value=64, waitingTaskQueue=1)
     public void callDefaultPayment(PaymentsRequest paymentsRequest) {
         var processorRequest = createProcessorRequest(paymentsRequest);
         var response = defaultPaymentsClient.sendPayment(processorRequest);
