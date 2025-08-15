@@ -68,7 +68,6 @@ public class PaymentService {
 
     @Fallback(fallbackMethod = "callFallbackPayment")
     @CircuitBreaker(requestVolumeThreshold=4, failureRatio=0.75, delay=100)
-    @Bulkhead(value=64, waitingTaskQueue=1)
     public void callDefaultPayment(PaymentsRequest paymentsRequest) {
         var processorRequest = createProcessorRequest(paymentsRequest);
         var response = defaultPaymentsClient.sendPayment(processorRequest);

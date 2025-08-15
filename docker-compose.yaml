@@ -1,15 +1,15 @@
 x-app-common: &app_common
-  image: 01c36507d28a75b52c07b296d8a3b3c64ba66faf1f163338ffd1500be05766f2
+  image: 79d750d03a8d64371c6ad9abbf81c70dd0557e7bfbbefcf5f25a64e0c686582b
   environment:
     QUARKUS_REDIS_HOSTS: redis://redis:6379
     REDIS_HOST: redis
     REDIS_PORT: 6379
     QUARKUS_HTTP_PORT: "8080"
-    REDIS_MAX_POOL_SIZE: 250
-    REDIS_MAX_POOL_WAITING: 250
-    REST_CLIENT_CONNECT_POOL_SIZE: 256
-    WRITER_BATCH_SIZE: 128
-    WRITER_CONSUMER_COUNT: 6
+    REDIS_MAX_POOL_SIZE: 100
+    REDIS_MAX_POOL_WAITING: 0
+    REST_CLIENT_CONNECT_POOL_SIZE: 128
+    WRITER_BATCH_SIZE: 512
+    WRITER_CONSUMER_COUNT: 1
   depends_on:
     redis:
       condition: service_started
@@ -18,17 +18,17 @@ x-app-common: &app_common
 services:
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "80mb", "--maxmemory-policy", "allkeys-lfu", "--tcp-backlog", "511"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 2s
-      retries: 10
+      retries: 5
     deploy:
       resources:
         limits:
           cpus: "0.1"
-          memory: 40M
+          memory: 85M
     restart: unless-stopped
     networks:
       - backend
@@ -39,7 +39,7 @@ services:
       resources:
         limits:
           cpus: "0.65"
-          memory: 130M
+          memory: 120M
     networks:
       - backend
       - payment-processor
@@ -50,7 +50,7 @@ services:
       resources:
         limits:
           cpus: "0.65"
-          memory: 130M
+          memory: 120M
     networks:
       - backend
       - payment-processor
@@ -67,12 +67,12 @@ services:
     ulimits:
       nofile: 200000
     command: [ "sh","-c","nginx -t && exec nginx -g 'daemon off;'" ]
-    restart: unless-stopped
+    restart: on-failure:3
     deploy:
       resources:
         limits:
           cpus: "0.1"
-          memory: 65M
+          memory: 25M
     networks:
       - backend
 
